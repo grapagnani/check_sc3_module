@@ -45,10 +45,9 @@ On debian and ubuntu, this is provided by the package **nagios-nrpe-server**
 
 * install the script for creating the scm working directory under, eg:
 
-    ```
-$HOME/bin/create_scm_working_dir.sh # with $HOME the home directory
-                                    # of the user running SeisComP3
-```
+    `$HOME/bin/create_scm_working_dir.sh`
+
+    with `$HOME` the home directory of the user running SeisComP3
 
 ## Configuration
 
