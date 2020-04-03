@@ -1,0 +1,189 @@
+#!/bin/bash
+
+# Nagios NRPE plugin to report status of SeisComP3 modules.
+# This plugin relies on information provided by
+# the SC3 scm module, specifically the mtextplugin of scm.
+
+# Created by G.Rapagnani - Royal Observatory of Belgium
+
+
+# Exports
+
+export LANG='C' TZ='UTC'
+export PATH='/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin'
+
+
+# Configuration
+
+SCM_WORK_DIR="/dev/shm/scm"
+DSC_FILE="$SCM_WORK_DIR/description.txt"
+WARNING_THRESHOLD=60 # [sec] response time higher than this -> WARNING
+CRITICAL_THRESHOLD=300 # [sec] response time higher than this -> CRITICAL
+
+
+# Constants
+
+PROGNAME="$(basename -- "$0")"
+
+
+# Functions
+
+print_and_exit() {
+    # $1: exit code
+    # $2: message to print
+    local retcode="$1" msg="$2" result="3"
+
+    case "$retcode" in
+        0) result="OK" ;;
+        1) result="WARNING" ;;
+        2) result="CRITICAL" ;;
+        *) result="UNKNOWN" ;;
+    esac
+
+    echo "$result: $msg"
+    exit "$retcode"
+}
+
+search_index() {
+    # Search column index of a given keyword on the first line
+    # of a given file. TAB-separated columns are expected
+    # $1: filename
+    # $2: keyword
+    local filename="$1" keyword="$2" idx="" colname=""
+
+    if [ -f "$filename" ]; then
+        for idx in {1..30}; do
+            colname="$(head -n 1 "$filename" | cut -f "$idx")"
+            if [ "$colname" = "$keyword" ]; then
+                break
+            fi
+        done
+    else
+        idx="30"
+    fi
+
+    echo "$idx"
+}
+
+get_status_file_name() {
+    # among all the status files produced by scm, search for the
+    # most recent status file belonging to given module name
+    # $1: module name
+    # $2: index of 'programname' column
+    # $3: index of 'pid' column
+
+    local modulename="$1" pn_idx="$2" pid_idx="$3"
+    local fname fname2 programname pid
+    local -a fname_list=()
+
+    # build a list of files related to $modulename
+    for fname in "$SCM_WORK_DIR"/*; do
+        programname="$(cut -f "$pn_idx" "$fname")"
+
+        if [ "$programname" = "python" ]; then
+            # search programname based on pid
+            pid="$(cut -f "$pid_idx" "$fname")"
+
+            programname="$(ps -fp "$pid" \
+                | grep "/seiscomp3/" \
+                | sed "s/.*python /python /" \
+                | cut -d" " -f2 \
+                | xargs basename)"
+        fi
+
+        if [ "$programname" = "$modulename" ]; then
+            fname_list+=("$fname")
+        fi
+    done
+
+    fname="${fname_list[0]}"
+
+    if [ -n "$fname" ]; then
+        for fname2 in "${fname_list[@]}"; do
+            [ "$fname2" -nt "$fname" ] && fname="$fname2"
+        done
+    fi
+
+    echo "$fname"
+}
+
+get_module_response_time() {
+    # among all the status files produced by scm, get the
+    # 'responsetime' for the given module name
+
+    # $1: module name
+    # $2: index of 'programname' column
+    # $3: index of 'responsetime' column
+    # $4: index of 'pid' column
+
+    local modulename="$1" pn_idx="$2" rt_idx="$3" pid_idx="$4" fname=""
+    local responsetime="" curtime="$(date +%s)" fmodtime=""
+
+    fname="$(get_status_file_name "$modulename" "$pn_idx" "$pid_idx")"
+
+    if [ -n "$fname" ]; then
+        responsetime="$(cut -f "$rt_idx" "$fname")"
+
+        fmodtime="$(stat "$fname"|grep "^Modify:")"
+        fmodtime="${fmodtime#*:}"
+        fmodtime="$(date -d "${fmodtime%.*}" +%s)"
+
+        if [ -n "$responsetime" ]; then
+            let responsetime+="$((curtime-fmodtime))"
+        else
+            responsetime="$((curtime-fmodtime))"
+        fi
+
+    fi
+
+    echo "$responsetime"
+}
+
+main() {
+    local modulename="$1"
+    local pn_idx rt_idx pid_idx responsetime
+
+    [ -z "$modulename" ] && print_and_exit 3 \
+        "usage: $PROGNAME <sc3_module_name>"
+
+    [ ! -d "$SCM_WORK_DIR" ] && print_and_exit 3 \
+        "scm working directory not found"
+
+    [ ! -f "$DSC_FILE" ] && print_and_exit 3 \
+        "description.txt file not found"
+
+
+    # search index of 'programname' column
+    pn_idx="$(search_index "$DSC_FILE" "programname")"
+    [ $pn_idx -eq 30 ] && print_and_exit 3 \
+        "could not find index of programname column"
+
+    # search index of 'responsetime' column
+    rt_idx="$(search_index "$DSC_FILE" "responsetime")"
+    [ $rt_idx -eq 30 ] && print_and_exit 3 \
+        "could not find index of responsetime column"
+
+    # search index of 'pid' column
+    pid_idx="$(search_index "$DSC_FILE" "pid")"
+    [ $pid_idx -eq 30 ] && print_and_exit 3 \
+        "could not find index of pid column"
+
+
+    # get response time of given module
+    responsetime="$(get_module_response_time "$modulename" "$pn_idx" \
+        "$rt_idx" "$pid_idx")"
+
+    [ -z "$responsetime" ] && print_and_exit 3 \
+        "could not find response time"
+
+    msg="$responsetime seconds since last response"
+
+    [ "$responsetime" -gt "$CRITICAL_THRESHOLD" ] && print_and_exit 2 "$msg"
+
+    [ "$responsetime" -gt "$WARNING_THRESHOLD" ] && print_and_exit 1 "$msg"
+
+    print_and_exit 0 "$msg"
+}
+
+main "$@"
+
