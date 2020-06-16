@@ -79,6 +79,7 @@ afterwards, `scm` does not write all the files required by the Nagios plugin.
 Restarting `scm` solves the issue. To instruct the restart of `scm`, set:
 
     `f_restart_scm=true`
+
     `seiscomp_cmd="$HOME/seiscomp3/bin/seiscomp"`
 
 * Make the script executable:
