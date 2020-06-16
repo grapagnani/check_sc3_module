@@ -9,6 +9,26 @@
 export LANG='C' TZ='UTC'
 export PATH='/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin'
 
+# Configuration
+
+f_restart_scm=false # restart scm module upon creation of its working directory
+seiscomp_cmd="$HOME/seiscomp3/bin/seiscomp"
+
+
+# Functions
+
+restart_scm() {
+    if [ -f "$seiscomp_cmd" -a -x "$seiscomp_cmd" ]; then
+        if "$seiscomp_cmd" status scm | grep -q "^scm  *is running"; then
+            "$seiscomp_cmd" restart scm >&2
+        else
+            echo "scm module is not running, so not restarting it." >&2
+        fi
+    else
+        echo "File \"$seiscomp_cmd\" not found/executable" >&2
+    fi
+}
+
 search_key="mtextplugin.outputDir"
 
 for scm_config_file in "$HOME"/.seiscomp3/scm.cfg \
@@ -29,6 +49,7 @@ if [ -f "$scm_config_file" ]; then
             echo "Directory \"$scm_work_dir\" already present" >&2
         else
             mkdir -v "$scm_work_dir" >&2
+            $f_restart_scm && restart_scm
         fi
     else
         echo -n "Config option \"$search_key\" not found inside " >&2

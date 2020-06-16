@@ -70,8 +70,16 @@ mtextplugin.outputDir = /dev/shm/scm
 ### Creation of scm working directory
 
 * The `create_scm_working_dir.sh` script takes the path of `scm` working
-directory directly from the file `scm.cfg`, whatever its location. No 
-configuration is required.
+directory directly from the file `scm.cfg`, whatever its location.
+
+* The script can restart `scm` module upon creation of the directory. This
+may be necessary when `scm` starts before the working directory has been
+created. We have encountered that, when the working directory is created
+afterwards, `scm` does not write all the files required by the Nagios plugin.
+Restarting `scm` solves the issue. To instruct the restart of `scm`, set:
+
+    `f_restart_scm=true`
+    `seiscomp_cmd="$HOME/seiscomp3/bin/seiscomp"`
 
 * Make the script executable:
 
