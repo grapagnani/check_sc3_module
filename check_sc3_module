@@ -80,13 +80,14 @@ get_status_file_name() {
     for fname in "$SCM_WORK_DIR"/*; do
         programname="$(cut -f "$pn_idx" "$fname")"
 
-        if [ "$programname" = "python" ]; then
+        if [[ "$programname" =~ ^python ]]; then
             # search programname based on pid
             pid="$(cut -f "$pid_idx" "$fname")"
 
             programname="$(ps -fp "$pid" \
                 | grep "/seiscomp3/" \
                 | sed "s/.*python /python /" \
+                | sed "s/.*python[0-9]\+\(\.[0-9]\+\)* /python /" \
                 | cut -d" " -f2 \
                 | xargs basename)"
         fi
