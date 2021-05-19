@@ -69,15 +69,17 @@ get_status_file_name() {
     # among all the status files produced by scm, search for the
     # most recent status file belonging to given module name
     # $1: module name
-    # $2: index of 'programname' column
-    # $3: index of 'pid' column
+    # $2: index of 'clientname' column
+    # $3: index of 'programname' column
+    # $4: index of 'pid' column
 
-    local modulename="$1" pn_idx="$2" pid_idx="$3"
-    local fname fname2 programname pid
+    local modulename="$1" cn_idx="$2" pn_idx="$3" pid_idx="$4"
+    local fname fname2 clientname programname pid
     local -a fname_list=()
 
     # build a list of files related to $modulename
     for fname in "$SCM_WORK_DIR"/*; do
+        clientname="$(cut -f "$cn_idx" "$fname")"
         programname="$(cut -f "$pn_idx" "$fname")"
 
         if [[ "$programname" =~ ^python ]]; then
@@ -94,7 +96,8 @@ get_status_file_name() {
             fi
         fi
 
-        if [ "$programname" = "$modulename" ]; then
+        if [ "$programname" = "$modulename" \
+            -o "$clientname" = "$modulename" ]; then
             fname_list+=("$fname")
         fi
     done
@@ -115,14 +118,15 @@ get_module_response_time() {
     # 'responsetime' for the given module name
 
     # $1: module name
-    # $2: index of 'programname' column
-    # $3: index of 'responsetime' column
-    # $4: index of 'pid' column
+    # $2: index of 'clientname' column
+    # $3: index of 'programname' column
+    # $4: index of 'responsetime' column
+    # $5: index of 'pid' column
 
-    local modulename="$1" pn_idx="$2" rt_idx="$3" pid_idx="$4" fname=""
-    local responsetime="" curtime="$(date +%s)" fmodtime=""
+    local modulename="$1" cn_idx="$2" pn_idx="$3" rt_idx="$4" pid_idx="$5"
+    local responsetime="" curtime="$(date +%s)" fmodtime="" fname=""
 
-    fname="$(get_status_file_name "$modulename" "$pn_idx" "$pid_idx")"
+    fname="$(get_status_file_name "$modulename" "$cn_idx" "$pn_idx" "$pid_idx")"
 
     if [ -n "$fname" ]; then
         responsetime="$(cut -f "$rt_idx" "$fname")"
@@ -144,7 +148,7 @@ get_module_response_time() {
 
 main() {
     local modulename="$1"
-    local pn_idx rt_idx pid_idx responsetime
+    local cn_idx pn_idx rt_idx pid_idx responsetime
 
     [ -z "$modulename" ] && print_and_exit 3 \
         "usage: $PROGNAME <sc3_module_name>"
@@ -156,25 +160,30 @@ main() {
         "description.txt file not found"
 
 
+    # search index of 'clientname' column
+    cn_idx="$(search_index "$DSC_FILE" "clientname")"
+    [ "$cn_idx" -eq 30 ] && print_and_exit 3 \
+        "could not find index of programname column"
+
     # search index of 'programname' column
     pn_idx="$(search_index "$DSC_FILE" "programname")"
-    [ $pn_idx -eq 30 ] && print_and_exit 3 \
+    [ "$pn_idx" -eq 30 ] && print_and_exit 3 \
         "could not find index of programname column"
 
     # search index of 'responsetime' column
     rt_idx="$(search_index "$DSC_FILE" "responsetime")"
-    [ $rt_idx -eq 30 ] && print_and_exit 3 \
+    [ "$rt_idx" -eq 30 ] && print_and_exit 3 \
         "could not find index of responsetime column"
 
     # search index of 'pid' column
     pid_idx="$(search_index "$DSC_FILE" "pid")"
-    [ $pid_idx -eq 30 ] && print_and_exit 3 \
+    [ "$pid_idx" -eq 30 ] && print_and_exit 3 \
         "could not find index of pid column"
 
 
     # get response time of given module
-    responsetime="$(get_module_response_time "$modulename" "$pn_idx" \
-        "$rt_idx" "$pid_idx")"
+    responsetime="$(get_module_response_time "$modulename" "$cn_idx" \
+        "$pn_idx" "$rt_idx" "$pid_idx")"
 
     [ -z "$responsetime" ] && print_and_exit 3 \
         "could not find response time"
