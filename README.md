@@ -1,5 +1,12 @@
 # Nagios NRPE plugin - monitor SeisComP3 modules
 
+## Preliminary note
+
+Starting with SeisComP4, this plugin doesn't work as expected. You might
+consider using the
+[seiscomp_modules_nrpe_monitor](https://github.com/grapagnani/seiscomp_modules_nrpe_monitor)
+instead, which might also work fine on SeisComP3, but not tested on SeisComP3.
+
 ## Presentation
 
 This Nagios plugin monitors the response time of various
